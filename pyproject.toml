@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-vllm"
-version = "0.0.1"
+version = "0.0.2"
 description = "Community vLLM provider utilities for Strands Agents (OpenAI-compatible)."
 readme = "README.md"
 requires-python = ">=3.10"
