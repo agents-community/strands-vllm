@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strands-vllm"
+version = "0.0.1.dev0"
+description = "Community vLLM provider utilities for Strands Agents (OpenAI-compatible)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Strands Community" }]
+keywords = ["strands", "agents", "vllm", "openai", "llm"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "strands-agents",
+  "openai>=1.68.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0,<9.0.0",
+  "pytest-asyncio>=1.0.0,<1.4.0",
+  "ruff>=0.13.0,<0.15.0",
+  "strands-agents-tools",
+]
+
+drift = [
+  "transformers",
+]
+
+[project.urls]
+Homepage = "https://github.com/strands-community/strands-vllm"
+Repository = "https://github.com/strands-community/strands-vllm"
+Issues = "https://github.com/strands-community/strands-vllm/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strands_vllm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
