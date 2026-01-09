@@ -82,6 +82,34 @@ pip install strands-agents-tools
 python examples/math_agent.py
 ```
 
+### Tool-call validation example
+
+```bash
+pip install strands-agents-tools
+python examples/tool_validation_agent.py
+```
+
+### RL rollout (TITO + loss_mask + retokenization check)
+
+```bash
+pip install "strands-vllm[drift]" strands-agents-tools
+python examples/rl_rollout_tito.py
+```
+
+### Tool-call validation (recommended with vLLM tool parsers)
+
+vLLM tool calling can involve server-side post-processing, so it can be useful to guard tool execution:
+
+```python
+from strands import Agent
+from strands_tools.calculator import calculator
+from strands_vllm import VLLMModel, VLLMToolValidationHooks
+
+model = VLLMModel(base_url="http://localhost:8000/v1", model_id="...", return_token_ids=True)
+agent = Agent(model=model, tools=[calculator], hooks=[VLLMToolValidationHooks()])
+print(agent("Compute 17 * 19 using the calculator tool."))
+```
+
 ### Retokenization drift (educational)
 
 This demo mirrors the idea from `strands-sglang` and shows why TITO matters:

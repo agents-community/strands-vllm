@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Basic vLLM hello-world example.
 
 Credit / reference:
 - Inspired by `horizon-rl/strands-sglang` community-provider style:
   https://github.com/horizon-rl/strands-sglang
 """
+
+from __future__ import annotations
 
 import os
 

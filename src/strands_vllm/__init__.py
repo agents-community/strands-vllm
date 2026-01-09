@@ -5,9 +5,10 @@ Credit / reference:
   https://github.com/horizon-rl/strands-sglang
 """
 
-from .token import Token, TokenManager
-from .vllm import VLLMModel, VLLMModelConfig, make_vllm_openai_model
 from .recorder import VLLMTokenRecorder
+from .token import Token, TokenManager
+from .tool_validation import VLLMToolValidationHooks
+from .vllm import VLLMModel, VLLMModelConfig, make_vllm_openai_model
 
 __all__ = [
     "VLLMModel",
@@ -16,4 +17,5 @@ __all__ = [
     "Token",
     "TokenManager",
     "VLLMTokenRecorder",
+    "VLLMToolValidationHooks",
 ]

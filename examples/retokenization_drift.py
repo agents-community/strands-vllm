@@ -25,15 +25,14 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import TYPE_CHECKING
-
-from transformers import AutoTokenizer  # type: ignore[import-untyped]
 
 from strands import Agent, tool
 from strands.handlers.callback_handler import CompositeCallbackHandler, PrintingCallbackHandler
 from strands_tools.calculator import calculator as _calculator_impl
+from transformers import AutoTokenizer  # type: ignore[import-untyped]
 
 from strands_vllm import TokenManager, VLLMModel, VLLMTokenRecorder
+
 
 @tool
 def calculator(expression: str) -> dict:
@@ -147,7 +146,7 @@ async def main() -> None:
     output_len = len(output_token_ids)
     print(f"Prompt tokens (first call): {prompt_len}")
     print(f"Output tokens (all calls):  {output_len}")
-    print(f"Segments: 2 (Prompt + Response)")
+    print("Segments: 2 (Prompt + Response)")
     print(f"  Seg 0: {prompt_len:5d} Prompt")
     print(f"  Seg 1: {output_len:5d} Response")
 
