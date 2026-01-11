@@ -125,6 +125,19 @@ python examples/retokenization_drift.py
 If your vLLM server includes token IDs in streaming responses, you can capture them
 using `VLLMTokenRecorder` (see `examples/basic_agent.py`).
 
+### Token IDs in OpenTelemetry spans (Agent Lightning)
+
+`VLLMTokenRecorder` automatically adds token IDs as OpenTelemetry span attributes for Agent Lightning
+compatibility. When `add_to_span=True` (default), the following span attributes are set:
+- `llm.token_count.prompt`, `llm.token_count.completion` - Standard OpenTelemetry token counts
+- `llm.hosted_vllm.prompt_token_ids`, `llm.hosted_vllm.response_token_ids` - Token ID arrays
+
+Reference: [Agent Lightning blog post](https://blog.vllm.ai/2025/10/22/agent-lightning.html)
+
+```bash
+python examples/span_token_ids.py
+```
+
 ## Development
 
 Install from source:

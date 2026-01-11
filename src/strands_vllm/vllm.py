@@ -165,6 +165,15 @@ class VLLMModel(OpenAIModel):
             async for event in response:
                 try:
                     last_chunk_dict = cast(dict[str, Any], event.model_dump())
+                    # Also include model_extra for vLLM-specific fields that might not be in the base schema
+                    if hasattr(event, "model_extra") and event.model_extra:
+                        last_chunk_dict.update(event.model_extra)
+                    # Check choices for token_ids (vLLM puts them in choice, not delta)
+                    if hasattr(event, "choices") and event.choices:
+                        choice = event.choices[0]
+                        if hasattr(choice, "model_extra") and choice.model_extra:
+                            if "choices" in last_chunk_dict and last_chunk_dict["choices"]:
+                                last_chunk_dict["choices"][0].update(choice.model_extra)
                 except Exception:
                     last_chunk_dict = None
 
