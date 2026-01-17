@@ -1,46 +1,51 @@
-# strands-vllm
+# Strands-vLLM
 
-Community vLLM utilities for the [Strands Agents SDK](https://github.com/strands-agents/sdk-python).
+[![PyPI](https://img.shields.io/pypi/v/strands-vllm.svg)](https://pypi.org/project/strands-vllm/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-vLLM serves an OpenAI-compatible API, so most users can simply use `OpenAIModel` with `base_url`.
-This package provides small convenience helpers and (optionally) token-id/TITO-friendly defaults.
+Community vLLM provider for [Strands Agents SDK](https://github.com/strands-agents/sdk-python) with Token-In/Token-Out (TITO) support and Agent Lightning integration.
 
-## Credit / reference
+## Features
 
-This community package is inspired by the structure and example style of
-[`horizon-rl/strands-sglang`](https://github.com/horizon-rl/strands-sglang).
+This package provides convenient utilities for using vLLM with the [Strands Agents SDK](https://github.com/strands-agents/sdk-python), designed for training-ready agent rollouts:
 
-## Install
+- **Token-In/Token-Out (TITO)**: capture token IDs directly from vLLM streaming responses (no retokenization drift)
+- **Agent Lightning integration**: automatic OpenTelemetry span attributes for token IDs
+- **Tool calling support**: validation hooks for vLLM's server-side tool call post-processing
+- **OpenAI-compatible API**: works with vLLM's OpenAI-compatible endpoint
+
+## Requirements
+
+- Python 3.10+
+- Strands Agents SDK
+- vLLM server running with your model
+
+## Installation
 
 ```bash
 pip install strands-vllm
 ```
 
-## vLLM server notes (tools + token IDs)
+Or install from source with development dependencies:
 
-- **Tools**: if you want tool calling, your vLLM server must be started with tool-calling enabled and an appropriate
-  chat template for your model (e.g., Llama 3.2 tool template).
-- **Token IDs (TITO)**: `return_token_ids=True` requests vLLM token IDs; vLLM will include `prompt_token_ids` and
-  streamed `token_ids` when supported.
-
-## Usage
-
-### Minimal: OpenAIModel pointed at vLLM
-
-```python
-from strands import Agent
-from strands.models.openai import OpenAIModel
-
-model = OpenAIModel(
-    client_args={"api_key": "EMPTY", "base_url": "http://localhost:8000/v1"},
-    model_id="AMead10/Llama-3.2-3B-Instruct-AWQ",
-)
-
-agent = Agent(model=model)
-print(agent("Hi"))
+```bash
+git clone https://github.com/agents-community/strands-vllm.git
+cd strands-vllm
+pip install -e ".[dev]"
 ```
 
-### Convenience: `VLLMModel`
+## Quick Start
+
+### 1. Start vLLM Server
+
+```bash
+vllm serve <MODEL_ID> \
+    --port 8000 \
+    --enable-auto-tool-choice \
+    --tool-call-parser llama3_json
+```
+
+### 2. Basic Agent
 
 ```python
 from strands import Agent
@@ -53,52 +58,152 @@ model = VLLMModel(
 )
 
 agent = Agent(model=model)
-print(agent("Say hello"))
+result = agent("Say hello")
+print(result)
 ```
 
-Tip: if you want to print only the final result (without streaming output being printed along the way),
-pass `callback_handler=None`:
+### 3. Token IDs for RL Training
 
 ```python
-agent = Agent(model=model, callback_handler=None)
-print(agent("Say hello"))
+from strands import Agent
+from strands.handlers.callback_handler import CompositeCallbackHandler, PrintingCallbackHandler
+from strands_vllm import VLLMModel, VLLMTokenRecorder
+
+model = VLLMModel(
+    base_url="http://localhost:8000/v1",
+    model_id="AMead10/Llama-3.2-3B-Instruct-AWQ",
+    return_token_ids=True,
+)
+
+recorder = VLLMTokenRecorder()
+printer = PrintingCallbackHandler(verbose_tool_use=False)
+callback = CompositeCallbackHandler(printer, recorder)
+
+agent = Agent(model=model, callback_handler=callback)
+agent("What is 17 * 19?")
+
+# Access TITO data for RL training
+print(f"Prompt token IDs: {recorder.prompt_token_ids}")
+print(f"Response token IDs: {recorder.token_ids}")
 ```
 
-### Examples
+**Note**: `VLLMTokenRecorder` automatically adds token IDs as OpenTelemetry span attributes (`llm.hosted_vllm.prompt_token_ids`, `llm.hosted_vllm.response_token_ids`) for [Agent Lightning](https://blog.vllm.ai/2025/10/22/agent-lightning.html) compatibility.
 
-All examples can be pointed at your server with:
+## Slime Training
+
+For RL training with [Slime](https://github.com/THUDM/slime/), `VLLMModel` with `VLLMTokenRecorder` eliminates the retokenization step by capturing token IDs directly from vLLM streaming responses.
+
+**Note**: This requires THUDM/slime to be installed (not the pip `slime` package):
+```bash
+pip install git+https://github.com/THUDM/slime.git
+```
+
+```python
+from strands import Agent, tool
+from strands_vllm import VLLMModel, VLLMTokenRecorder, TokenManager
+from slime.utils.types import Sample
+
+SYSTEM_PROMPT = "..."
+MAX_TOOL_ITERATIONS = ...  # e.g., 5
+
+@tool
+def execute_python_code(code: str):
+    """Execute Python code and return the output."""
+    ...
+
+async def generate(args, sample: Sample, sampling_params) -> Sample:
+    """Generate with TITO: tokens captured during generation, no retokenization."""
+    assert not args.partial_rollout, "Partial rollout not supported."
+
+    # Set up Agent with VLLMModel and VLLMTokenRecorder
+    model = VLLMModel(
+        base_url=args.vllm_base_url,
+        model_id=args.hf_checkpoint.split("/")[-1],
+        return_token_ids=True,
+        params={k: sampling_params[k] for k in ["max_new_tokens", "temperature", "top_p"]},
+    )
+    recorder = VLLMTokenRecorder()
+    agent = Agent(
+        model=model,
+        tools=[execute_python_code],
+        callback_handler=recorder,
+        system_prompt=SYSTEM_PROMPT,
+    )
+
+    # Run Agent Loop
+    prompt = sample.prompt if isinstance(sample.prompt, str) else sample.prompt[0]["content"]
+    try:
+        await agent.invoke_async(prompt)
+        sample.status = Sample.Status.COMPLETED
+    except Exception as e:
+        # Always use TRUNCATED instead of ABORTED because Slime doesn't properly
+        # handle ABORTED samples in reward processing. See: https://github.com/THUDM/slime/issues/200
+        sample.status = Sample.Status.TRUNCATED
+        logger.warning(f"TRUNCATED: {type(e).__name__}: {e}")
+
+    # TITO: extract trajectory from recorder and TokenManager
+    tm = TokenManager()
+    for entry in recorder.history:
+        pti = entry.get("prompt_token_ids")
+        ti = entry.get("token_ids")
+        if pti:
+            tm.add_prompt(pti)
+        if ti:
+            tm.add_response(ti)
+
+    prompt_len = len(tm.segments[0])  # system + user are first segment
+    sample.tokens = tm.token_ids
+    sample.loss_mask = tm.loss_mask[prompt_len:]
+    sample.rollout_log_probs = tm.logprobs[prompt_len:]
+    sample.response_length = len(sample.tokens) - prompt_len
+
+    # Extract response from agent messages (vLLM returns text directly, no tokenizer needed)
+    response_text = ""
+    for msg in reversed(agent.messages):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and "text" in block:
+                        response_text = block["text"]
+                        break
+            if response_text:
+                break
+    sample.response = response_text
+
+    # Cleanup and return
+    recorder.reset()
+    agent.cleanup()
+    return sample
+```
+
+## Examples
+
+All examples can be configured with environment variables:
 
 ```bash
 export VLLM_BASE_URL="http://localhost:8000/v1"
 export VLLM_MODEL_ID="AMead10/Llama-3.2-3B-Instruct-AWQ"
 ```
 
-### Tools (strands-agents-tools)
-
-Install the optional tools package and run the example:
+### Math agent with tools
 
 ```bash
 pip install strands-agents-tools
 python examples/math_agent.py
 ```
 
-### Tool-call validation example
+### Agent Lightning integration
+
+Demonstrates token IDs in OpenTelemetry spans for Agent Lightning compatibility:
 
 ```bash
-pip install strands-agents-tools
-python examples/tool_validation_agent.py
+python examples/agent_lightning.py
 ```
 
-### RL rollout (TITO + loss_mask + retokenization check)
+### Tool-call validation
 
-```bash
-pip install "strands-vllm[drift]" strands-agents-tools
-python examples/rl_rollout_tito.py
-```
-
-### Tool-call validation (recommended with vLLM tool parsers)
-
-vLLM tool calling can involve server-side post-processing, so it can be useful to guard tool execution:
+vLLM tool calling can involve server-side post-processing. Use validation hooks to guard tool execution:
 
 ```python
 from strands import Agent
@@ -112,42 +217,55 @@ print(agent("Compute 17 * 19 using the calculator tool."))
 
 ### Retokenization drift (educational)
 
-This demo mirrors the idea from `strands-sglang` and shows why TITO matters:
-`encode(decode(tokens)) != tokens` can happen.
+This demo shows why TITO matters: `encode(decode(tokens)) != tokens` can happen.
 
 ```bash
 pip install "strands-vllm[drift]" strands-agents-tools
 python examples/retokenization_drift.py
 ```
 
-### Token-in / token-out (TITO)
-
-If your vLLM server includes token IDs in streaming responses, you can capture them
-using `VLLMTokenRecorder` (see `examples/basic_agent.py`).
-
-### Token IDs in OpenTelemetry spans (Agent Lightning)
-
-`VLLMTokenRecorder` automatically adds token IDs as OpenTelemetry span attributes for Agent Lightning
-compatibility. When `add_to_span=True` (default), the following span attributes are set:
-- `llm.token_count.prompt`, `llm.token_count.completion` - Standard OpenTelemetry token counts
-- `llm.hosted_vllm.prompt_token_ids`, `llm.hosted_vllm.response_token_ids` - Token ID arrays
-
-Reference: [Agent Lightning blog post](https://blog.vllm.ai/2025/10/22/agent-lightning.html)
+## Testing
 
 ```bash
-python examples/span_token_ids.py
+# Unit tests
+uv run pytest tests/unit/ -v
+
+# Integration tests (requires vLLM server)
+export VLLM_BASE_URL="http://localhost:8000/v1"
+export VLLM_MODEL_ID="AMead10/Llama-3.2-3B-Instruct-AWQ"
+uv run pytest tests/integration/ -v
 ```
 
-## Development
+Integration tests include:
+- `test_agent_math500.py` - Agent tests with real MATH-500 problems and TITO consistency checks
+- `test_slime_integration.py` - Slime training pattern using Slime's `Sample` type (requires `pip install git+https://github.com/THUDM/slime.git`)
 
-Install from source:
+## Contributing
+
+Contributions welcome! Install pre-commit hooks for code style and commit message validation:
 
 ```bash
-git clone <your-fork-url>
-cd strands-vllm
 pip install -e ".[dev]"
+pre-commit install -t pre-commit -t commit-msg
 ```
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/). Commit messages must follow the format:
+
+```
+<type>(<scope>): <description>
+
+# Examples:
+feat(recorder): add Agent Lightning span attributes
+fix(vllm): handle empty response from server
+docs: update TITO usage examples
+```
+
+Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+
+## Related Projects
+
+- [strands-sglang](https://github.com/horizon-rl/strands-sglang) - SGLang provider for Strands Agents SDK
 
 ## License
 
-Apache-2.0
+Apache License 2.0 - see [LICENSE](LICENSE).

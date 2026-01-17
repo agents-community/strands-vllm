@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "strands-vllm"
-version = "0.0.4"
+version = "0.0.5"
 description = "Community vLLM provider utilities for Strands Agents (OpenAI-compatible)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,6 +50,7 @@ packages = ["src/strands_vllm"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120

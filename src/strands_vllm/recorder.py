@@ -32,7 +32,7 @@ class VLLMTokenRecorder:
         agent = Agent(model=model, callback_handler=recorder)
         agent("hi")
         print(recorder.prompt_token_ids, recorder.token_ids)
-    
+
     If OpenTelemetry is available, token IDs are automatically added as span attributes
     (`llm.hosted_vllm.prompt_token_ids`, `llm.hosted_vllm.response_token_ids`) for Agent Lightning compatibility.
     """
@@ -77,29 +77,29 @@ class VLLMTokenRecorder:
             self.prompt_token_ids = pti
         if ti is not None:
             self.token_ids = ti
-        
+
         if pti is not None or ti is not None:
             self.history.append({"prompt_token_ids": pti, "token_ids": ti})
             if self.add_to_span:
                 self._add_token_ids_to_span(pti, ti)
-    
+
     def _add_token_ids_to_span(self, prompt_token_ids: list[int] | None, token_ids: list[int] | None) -> None:
         """Add token IDs as attributes to the current OpenTelemetry span for Agent Lightning compatibility.
-        
+
         Sets the following span attributes:
         - llm.token_count.prompt, llm.token_count.completion (standard OpenTelemetry attributes)
         - llm.hosted_vllm.prompt_token_ids, llm.hosted_vllm.response_token_ids (token ID arrays)
-        
+
         Reference: https://blog.vllm.ai/2025/10/22/agent-lightning.html
         """
         if not _HAS_OTEL or trace_api is None:
             return
-        
+
         try:
             span = trace_api.get_current_span()
             if not span.is_recording():
                 return
-            
+
             if prompt_token_ids is not None:
                 span.set_attribute("llm.token_count.prompt", len(prompt_token_ids))
                 span.set_attribute("llm.hosted_vllm.prompt_token_ids", prompt_token_ids)

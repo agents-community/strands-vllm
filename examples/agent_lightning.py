@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Demonstrate token IDs in OpenTelemetry spans for Agent Lightning.
+"""Agent Lightning integration: token IDs in OpenTelemetry spans.
 
-This example shows how VLLMTokenRecorder automatically adds token IDs to OpenTelemetry
-spans, making them available for Agent Lightning to extract during training.
+This example demonstrates how VLLMTokenRecorder automatically adds token IDs to OpenTelemetry
+spans for Agent Lightning compatibility, making them available for RL training data extraction.
 
 The token IDs are added as span attributes:
 - llm.token_count.prompt: Token count for the prompt (standard OpenTelemetry attribute)
@@ -14,7 +14,7 @@ Install:
   pip install "strands-vllm" strands-agents-tools
 
 Run:
-  python examples/span_token_ids.py
+  python examples/agent_lightning.py
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def main() -> None:
     # Start a trace context
     if _HAS_OTEL:
         tracer = trace.get_tracer(__name__)
-        with tracer.start_as_current_span("agent_invocation") as span:
+        with tracer.start_as_current_span("agent_invocation"):
             result = agent('Reply with exactly this text: "The answer is 42"')
             inspector.inspect_current_span()
     else:
