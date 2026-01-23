@@ -64,7 +64,8 @@ def test_tool_validation_hooks_cancels_missing_required_args():
     assert event.cancel_tool
 
 
-def test_tool_validation_hooks_cancels_invalid_json_string_input():
+def test_tool_validation_hooks_cancels_non_dict_input():
+    """String inputs that weren't parsed by Strands are rejected."""
     tool_registry = ToolRegistry()
     tool_registry.process_tools([add])
     agent = _FakeAgent(tool_registry=tool_registry)
@@ -77,10 +78,11 @@ def test_tool_validation_hooks_cancels_invalid_json_string_input():
     event = BeforeToolCallEvent(
         agent=agent,  # type: ignore[arg-type]
         selected_tool=selected_tool,
-        tool_use={"toolUseId": "t1", "name": "add", "input": "{not json"},
+        tool_use={"toolUseId": "t1", "name": "add", "input": "not a dict"},
         invocation_state={},
     )
 
     event, _ = registry.invoke_callbacks(event)
     assert event.cancel_tool
+    assert "must be an object" in event.cancel_tool
 
